@@ -4,9 +4,11 @@ import os
 from datetime import datetime
 import requests
 import bs4
-import huey
+from huey import FileHuey, crontab
 
 import sqlite3
+
+huey = FileHuey()
 
 @dataclass
 class Entry:
@@ -121,7 +123,10 @@ def main():
         print(pair)
         update_entry(db, pair.new)
 
+    # crontab(hour='*/1')
     db.close()
+
+    
 
 if __name__ == '__main__':
     main()
