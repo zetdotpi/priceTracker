@@ -1,14 +1,16 @@
+from email import header
 from typing import List
+import time
 from dataclasses import dataclass
 import os
 from datetime import datetime
+from multiprocessing import Pool
 import requests
 import bs4
-from huey import FileHuey, crontab
 
 import sqlite3
 
-huey = FileHuey()
+from pprint import pprint
 
 @dataclass
 class Entry:
@@ -101,32 +103,52 @@ def update_entry(db: sqlite3.Connection, entry: Entry):
     c.close()
 
 def pull_entry_data(entry: Entry) -> ComparisonPair:
-    res = requests.get(entry.url)
+    res = requests.get(entry.url, headers = {'User-Agent': 'Mozilla/5.0 (Macintosh; Intel Mac OS X 10_10_1) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/39.0.2171.95 Safari/537.36'})
     if not res.ok:
         print(f'Something is not OK with request to this url-> {entry.url}')
-
+        return ComparisonPair(entry, entry)
     soup = bs4.BeautifulSoup(res.text, 'html.parser')
     price_tag = soup.find('span', {'class': 'js-item-price'})
-    price = float(price_tag['content'])
+    price = float(price_tag['content']) or None
     new = Entry(entry.url, price, datetime.now(), entry.active)
     return ComparisonPair(entry, new)    
 
+db = get_db()    
+
+def refresh_active_entries():
+    active = get_active_entries(db)
+    
+    with Pool() as pool:
+        pairs = pool.map(pull_entry_data, active)
+    
+    # for pair in pairs:
+    #     pprint(pair)
+
 def main():    
-    sqlite3.enable_callback_tracebacks(True)
-    db = get_db()
+    # sqlite3.enable_callback_tracebacks(True)
+    # db = get_db()
 
-    print('SELECTING ALL ACTIVE')
-    active_entries = get_active_entries(db)
-    for entry in active_entries:
-        print(entry)
-        pair = pull_entry_data(entry)
-        print(pair)
-        update_entry(db, pair.new)
+    # print('SELECTING ALL ACTIVE')
+    # active_entries = get_active_entries(db)
+    # for entry in active_entries:
+    #     print(entry)
+    #     pair = pull_entry_data(entry)
+    #     print(pair)
+    #     update_entry(db, pair.new)
 
-    # crontab(hour='*/1')
+    sleep_time = 60
+    try:
+        while True:
+            refresh_active_entries()
+            print(80*'=')
+            print(f'Sleeping for {sleep_time} seconds')
+            time.sleep(sleep_time)
+    except KeyboardInterrupt as e:
+        print(f'Caught keyboard interrupt')
+
     db.close()
 
-    
+
 
 if __name__ == '__main__':
     main()
