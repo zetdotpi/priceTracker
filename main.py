@@ -104,6 +104,7 @@ def update_entry(db: sqlite3.Connection, entry: Entry):
 
 def pull_entry_data(entry: Entry) -> ComparisonPair:
     res = requests.get(entry.url, headers = {'User-Agent': 'Mozilla/5.0 (Macintosh; Intel Mac OS X 10_10_1) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/39.0.2171.95 Safari/537.36'})
+    print(res.status_code, res.reason)
     if not res.ok:
         print(f'Something is not OK with request to this url-> {entry.url}')
         return ComparisonPair(entry, entry)
@@ -115,14 +116,23 @@ def pull_entry_data(entry: Entry) -> ComparisonPair:
 
 db = get_db()    
 
+
+def notify_price_change(pair: ComparisonPair):
+    print(f'Notify about price change for {pair}')
+
 def refresh_active_entries():
     active = get_active_entries(db)
     
     with Pool() as pool:
         pairs = pool.map(pull_entry_data, active)
     
-    # for pair in pairs:
-    #     pprint(pair)
+    for pair in pairs:
+        if pair.old.price != pair.new.price:
+            print(f'Entry {pair.new.url} price changed: \
+                {pair.old.price} -> {pair.new.price}')
+            update_entry(db, pair.new)
+            notify_price_change(pair)
+
 
 def main():    
     # sqlite3.enable_callback_tracebacks(True)
