@@ -20,7 +20,12 @@ DB_PATH = './pricetracker.db'
 
 
 def pull_entry_data(entry: Entry) -> ComparisonPair:
-    res = requests.get(entry.url, headers = {'User-Agent': 'Mozilla/5.0 (Macintosh; Intel Mac OS X 10_10_1) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/39.0.2171.95 Safari/537.36'})
+    res = requests.get(
+        entry.url,
+        headers = {
+            'User-Agent': 'Mozilla/5.0 (Macintosh; Intel Mac OS X 10_10_1) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/39.0.2171.95 Safari/537.36'
+        }
+    )
     print(res.status_code, res.reason)
     if not res.ok:
         print(f'Something is not OK with request to this url-> {entry.url}')
