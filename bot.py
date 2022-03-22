@@ -10,14 +10,23 @@ from telegram.ext import (
     CallbackContext
 )
 
-from .config import BOT_API_KEY, DB_PATH
+from .config import BOT_API_KEY, DB_PATH, ACCESS_PASSWORD
+        
 
+AUTH_ENTER, AUTH_ACCEPTED, \
+MENU, \
+ADD_ENTRY, CHOOSE_ADD_ENTRY, \
+REMOVE_ENTRY, CHOOSE_REMOVE_ENTRY, \
+SHOW_ENTRY, CHOOSE_SHOW_ENTRY = range(9)
 
-db = sqlite3.connect(DB_PATH)
+bot_db = BotDB(DB_PATH)
 
+def start(update: Update, context: CallbackContext) -> int:
+    return ConversationHandler.END
 
-def start():
-    return ConversationHandler.
+def auth_enter(update: Update) -> int:
+    if update.message.text == ACCESS_PASSWORD:
+        bot_db.add_user_id(update.chat_member.from_user.id)
 
 def main():
     updater = Updater(BOT_API_KEY)
@@ -26,7 +35,11 @@ def main():
 
     auth_handler = ConversationHandler(
         entry_points=[CommandHandler('start', start)],
-
+        states = {
+            AUTH_ENTER: [
+                MessageHandler()
+            ]
+        }
     )
 
     dispatcher.add_handler(auth_handler)
