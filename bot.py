@@ -1,6 +1,6 @@
-import sqlite3
+import validators
 
-from telegram import ReplyKeyboardMarkup, ReplyKeyboardRemove, Update
+from telegram import ParseMode, ReplyKeyboardMarkup, ReplyMarkup, Update
 from telegram.ext import (
     Updater,
     CommandHandler,
@@ -10,42 +10,100 @@ from telegram.ext import (
     CallbackContext
 )
 
-from .config import BOT_API_KEY, DB_PATH, ACCESS_PASSWORD
+from db import PriceTrackerDB
+from config import BOT_API_KEY, DB_PATH, ACCESS_PASSWORD
         
 
-AUTH_ENTER, AUTH_ACCEPTED, \
-MENU, \
-ADD_ENTRY, CHOOSE_ADD_ENTRY, \
-REMOVE_ENTRY, CHOOSE_REMOVE_ENTRY, \
-SHOW_ENTRY, CHOOSE_SHOW_ENTRY = range(9)
+AUTH = 0; MENU = 1
+ENTRY_LIST = 10
+ENTRY_ADD = 20; ENTRY_ADD_URL = 21
+ENTRY_REMOVE = 30; ENTRY_REMOVE_CHOICE = 31
 
-bot_db = BotDB(DB_PATH)
+db = PriceTrackerDB(DB_PATH)
 
+updater = Updater(BOT_API_KEY)
+bot = updater.bot
+#bot.send_message(chat_id=user_id, text='message itself')
 def start(update: Update, context: CallbackContext) -> int:
+    if db.user_id_exists(update.message.from_user.id):
+        update.message.reply_text('Вы уже называли пароль. Я вас помню.')
+        return ConversationHandler.END
+    
+    update.message.reply_text('Назовите пароль')
+    return AUTH
+
+def auth_enter(update: Update, context: CallbackContext) -> int:
+    if update.message.text == ACCESS_PASSWORD:
+        db.add_user_id(update.message.from_user.id)
+        update.message.reply_text('Все, верно.')
+        return ConversationHandler.END
+    else:
+        update.message.reply_text('Нет. Попытайтесь еще раз')
+        return AUTH
+
+
+def list_entries(update: Update, context: CallbackContext):
+    items = db.get_user_subscriptions(update.message.from_user.id)
+    if len(items) == 0:
+        update.message.reply_text('В списке отслеживания ничего нет.')
+        return
+    msg = '\n'.join([item.to_string() for item in items])
+    update.message.reply_text(msg, parse_mode=ParseMode.MARKDOWN)
+
+
+def add_entry(update: Update, context: CallbackContext):
+    answer = update.message.text
+    try:
+        validators.url(answer)
+        db.add_entry(answer)
+    except validators.ValidationFailure as e:
+        print(e)
+        update.message.reply_text('Invalid URL')
     return ConversationHandler.END
 
-def auth_enter(update: Update) -> int:
-    if update.message.text == ACCESS_PASSWORD:
-        bot_db.add_user_id(update.chat_member.from_user.id)
+def remove_entry(update: Update, context: CallbackContext):
+    entries = db.get_user_subscriptions(update.message.from_user.id)
+    if len(entries) == 0:
+        update.message.reply_text('У вас нет отслеживаемых объявлений')
+        return ConversationHandler.END
+    selections = [f'{entry.title}\n{entry.url}' for entry in entries]
+    markup = ReplyKeyboardMarkup(selections, one_time_keyboard=True)
+    update.message.reply_text('Выберите элемент для удаления', reply_markup=markup)
+    return ENTRY_REMOVE_CHOICE
+
+def fallback(update: Update, context: CallbackContext):
+    return ConversationHandler.END
+
+def remove_selected_entry(update: Update, context: CallbackContext):
+    user_id =  update.message.from_user.id
+    url = update.message.text.split('\n')[1]
+    db.delete_subscription(user_id, url)
+    return ConversationHandler.END
 
 def main():
-    updater = Updater(BOT_API_KEY)
-
     dispatcher = updater.dispatcher
 
     auth_handler = ConversationHandler(
         entry_points=[CommandHandler('start', start)],
         states = {
-            AUTH_ENTER: [
-                MessageHandler()
-            ]
-        }
+            AUTH: [MessageHandler(Filters.text, auth_enter)],
+        },
+        fallbacks=[MessageHandler(Filters.text, fallback)]
+    )
+
+    remove_handler = ConversationHandler(
+        entry_points=[CommandHandler('remove', remove_entry)],
+        states = {
+            ENTRY_REMOVE_CHOICE: [MessageHandler(Filters.text, remove_selected_entry)],
+        },
+        fallbacks=[MessageHandler(Filters.text, fallback)]
     )
 
     dispatcher.add_handler(auth_handler)
-
+    dispatcher.add_handler(CommandHandler('list', list_entries))
+    dispatcher.add_handler(CommandHandler('add', add_entry))
+    dispatcher.add_handler(remove_handler)
     updater.start_polling()
-
     updater.idle()
 
 if __name__ == '__main__':

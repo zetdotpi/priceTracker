@@ -5,6 +5,7 @@ from entities import Entry
 
 _CREATE_TABLES_STMT = '''
     CREATE TABLE IF NOT EXISTS observables (
+        title TEXT,
         url TEXT PRIMARY KEY,
         price DECIMAL(10,2),
         last_check_dt DATETIME
@@ -23,13 +24,13 @@ _CREATE_TABLES_STMT = '''
 '''
 
 _GET_ENTRIES_STMT = '''
-    SELECT url, price, last_check_dt 
+    SELECT title, url, price, last_check_dt 
     FROM observables;
 '''
 
 _INSERT_ENTRY_STMT = '''
-    INSERT INTO observables(url, price, last_check_dt)
-    VALUES (?, NULL, NULL);
+    INSERT INTO observables(title, url, price, last_check_dt)
+    VALUES (NULL, ?, NULL, NULL);
 '''
 
 _UPDATE_ENTRY_STMT = '''
@@ -64,20 +65,33 @@ _INSERT_SUBSCRIPTION_STMT = '''
 _DELETE_SUBSCRIPTION_STMT = '''
     DELETE FROM subscriptions
     WHERE user_id = ? AND observable_url = ?;
-
-
 '''
+
+_GET_USER_SUBSCRIPTIONS_STMT = '''
+    SELECT title, url, price, last_check_dt
+    FROM observables
+    WHERE url IN (
+        SELECT url 
+        FROM subscriptions
+        WHERE user_id = ?
+    );
+'''
+
 
 class  PriceTrackerDB:
     def _create_tables(self):
         self.conn.executescript(_CREATE_TABLES_STMT)
     
     def __init__(self, db_path: str):
-        self.conn = sqlite3.connect(db_path)
+        self.conn = sqlite3.connect(db_path, check_same_thread=False)
         self._create_tables()
     
     def add_user_id(self, id: int):
         self.conn.execute(_INSERT_USER_STMT, (id,))
+    
+    def user_id_exists(self, id: int) -> bool:
+        c = self.conn.execute("SELECT COUNT() FROM users WHERE id = ?", (id, )).fetchone()[0]
+        return c > 0    #if one or more matching IDs found -> true, else -> false
 
     def delete_user_id(self, id: int):
         self.conn.execute(_DELETE_USER_STMT, (id,))
@@ -108,3 +122,8 @@ class  PriceTrackerDB:
 
     def delete_entry(self, url: str):
         self.conn.execute(_DELETE_ENTRY_STMT, (url,))
+
+    def get_user_subscriptions(self, user_id: int) -> List[Entry]:
+        data = self.conn.execute(_GET_USER_SUBSCRIPTIONS_STMT, (user_id,)).fetchall()
+        entries = [Entry.from_tuple(item) for item in data]
+        return entries

@@ -1,16 +1,9 @@
-from email import header
-from sqlite3 import dbapi2
-from typing import List
 import time
-import os
 from datetime import datetime
 from multiprocessing import Pool
 import requests
 import bs4
 
-import sqlite3
-
-from pprint import pprint
 
 from entities import Entry, ComparisonPair
 from db import PriceTrackerDB
@@ -31,9 +24,14 @@ def pull_entry_data(entry: Entry) -> ComparisonPair:
         print(f'Something is not OK with request to this url-> {entry.url}')
         return ComparisonPair(entry, entry)
     soup = bs4.BeautifulSoup(res.text, 'html.parser')
+
+    title_tag = soup.find('span', {'class': 'title-info-title-text'})
+    title = title_tag.get_text()
+    
     price_tag = soup.find('span', {'class': 'js-item-price'})
     price = float(price_tag['content']) or None
-    new = Entry(entry.url, price, datetime.now())
+    
+    new = Entry(title, entry.url, price, datetime.now())
     return ComparisonPair(entry, new)    
 
 db = PriceTrackerDB(DB_PATH)
