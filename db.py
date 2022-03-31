@@ -58,7 +58,7 @@ _DELETE_USER_STMT = '''
 '''
 
 _INSERT_SUBSCRIPTION_STMT = '''
-    INSERT INTO subscriptions(user_id, subscription_url)
+    INSERT INTO subscriptions(user_id, observable_url)
     VALUES (?, ?);
 '''
 
@@ -80,50 +80,64 @@ _GET_USER_SUBSCRIPTIONS_STMT = '''
 
 class  PriceTrackerDB:
     def _create_tables(self):
-        self.conn.executescript(_CREATE_TABLES_STMT)
+        self.cur.executescript(_CREATE_TABLES_STMT)
+        self.conn.commit()
     
     def __init__(self, db_path: str):
         self.conn = sqlite3.connect(db_path, check_same_thread=False)
+        self.cur = self.conn.cursor()
         self._create_tables()
     
     def add_user_id(self, id: int):
-        self.conn.execute(_INSERT_USER_STMT, (id,))
-    
+        self.cur.execute(_INSERT_USER_STMT, (id,))
+        self.conn.commit()
+
     def user_id_exists(self, id: int) -> bool:
-        c = self.conn.execute("SELECT COUNT() FROM users WHERE id = ?", (id, )).fetchone()[0]
+        c = self.cur.execute("SELECT COUNT() FROM users WHERE id = ?", (id, )).fetchone()[0]
+        self.conn.commit()
         return c > 0    #if one or more matching IDs found -> true, else -> false
 
     def delete_user_id(self, id: int):
-        self.conn.execute(_DELETE_USER_STMT, (id,))
+        self.cur.execute(_DELETE_USER_STMT, (id,))
+        self.conn.commit()
 
     def add_subscription(self, user_id: int, url: str):
-        c = self.conn.execute("SELECT COUNT() FROM OBSERVABLES WHERE url = ?", (url, )).fetchone()[0]
+        self.add_entry(url)
+        c = self.cur.execute("SELECT COUNT() FROM OBSERVABLES WHERE url = ?", (url, )).fetchone()[0]
         if c == 0:
             self.add_entry(url)
-        self.conn.execute(_INSERT_SUBSCRIPTION_STMT, (user_id, url))
+        self.cur.execute(_INSERT_SUBSCRIPTION_STMT, (user_id, url))
+        self.conn.commit()
 
     def delete_subscription(self, user_id: int, url: str):
-        self.conn.execute(_DELETE_SUBSCRIPTION_STMT, (user_id, url))
-        c = self.conn.execute("SELECT COUNT() FROM subscriptions WHERE observable_url = ?", (url,)).fetchone()[0]
+        self.cur.execute(_DELETE_SUBSCRIPTION_STMT, (user_id, url))
+        self.conn.commit()
+        c = self.cur.execute("SELECT COUNT() FROM subscriptions WHERE observable_url = ?", (url,)).fetchone()[0]
         if c == 0:
             self.delete_entry(url)
 
     def get_entries(self) -> List[Entry]:
-        data = self.conn.execute(_GET_ENTRIES_STMT).fetchall()
+        data = self.cur.execute(_GET_ENTRIES_STMT).fetchall()
         entries = [Entry.from_tuple(item) for item in data]
         return entries
 
     def add_entry(self, url: str) -> Entry:
-        self.conn.execute(_INSERT_ENTRY_STMT, (url,))
+        self.cur.execute(_INSERT_ENTRY_STMT, (url,))
+        self.conn.commit()
         return Entry(url, None, None, True)
 
     def update_entry(self, entry: Entry):
-        self.conn.execute(_UPDATE_ENTRY_STMT, entry.to_tuple())
+        self.cur.execute(_UPDATE_ENTRY_STMT, entry.to_tuple())
+        self.conn.commit()
 
     def delete_entry(self, url: str):
-        self.conn.execute(_DELETE_ENTRY_STMT, (url,))
+        self.cur.execute(_DELETE_ENTRY_STMT, (url,))
+        self.conn.commit()
 
     def get_user_subscriptions(self, user_id: int) -> List[Entry]:
-        data = self.conn.execute(_GET_USER_SUBSCRIPTIONS_STMT, (user_id,)).fetchall()
+        data = self.cur.execute(_GET_USER_SUBSCRIPTIONS_STMT, (user_id,)).fetchall()
         entries = [Entry.from_tuple(item) for item in data]
         return entries
+
+    def close(self):
+        self.conn.close()

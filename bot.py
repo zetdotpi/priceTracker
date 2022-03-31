@@ -52,13 +52,16 @@ def list_entries(update: Update, context: CallbackContext):
 
 
 def add_entry(update: Update, context: CallbackContext):
+    update.message.reply_text('Введите ссылку на объявление')
+    return ENTRY_ADD_URL
+
+def add_entry_url(update: Update, context: CallbackContext):
     answer = update.message.text
-    try:
-        validators.url(answer)
-        db.add_entry(answer)
-    except validators.ValidationFailure as e:
-        print(e)
-        update.message.reply_text('Invalid URL')
+    if validators.url(answer):
+        db.add_subscription(update.message.from_user.id, answer)
+        update.message.reply_text('Готово.')
+    else:
+        update.message.reply_text('Неверная ссылка.')
     return ConversationHandler.END
 
 def remove_entry(update: Update, context: CallbackContext):
@@ -67,7 +70,7 @@ def remove_entry(update: Update, context: CallbackContext):
         update.message.reply_text('У вас нет отслеживаемых объявлений')
         return ConversationHandler.END
     selections = [f'{entry.title}\n{entry.url}' for entry in entries]
-    markup = ReplyKeyboardMarkup(selections, one_time_keyboard=True)
+    markup = ReplyKeyboardMarkup([selections,], one_time_keyboard=True)
     update.message.reply_text('Выберите элемент для удаления', reply_markup=markup)
     return ENTRY_REMOVE_CHOICE
 
@@ -91,6 +94,15 @@ def main():
         fallbacks=[MessageHandler(Filters.text, fallback)]
     )
 
+
+    add_handler = ConversationHandler(
+        entry_points=[CommandHandler('add', add_entry)],
+        states = {
+            ENTRY_ADD_URL: [MessageHandler(Filters.text, add_entry_url)],
+        },
+        fallbacks=[MessageHandler(Filters.text,fallback)]
+    )
+
     remove_handler = ConversationHandler(
         entry_points=[CommandHandler('remove', remove_entry)],
         states = {
@@ -101,10 +113,21 @@ def main():
 
     dispatcher.add_handler(auth_handler)
     dispatcher.add_handler(CommandHandler('list', list_entries))
-    dispatcher.add_handler(CommandHandler('add', add_entry))
+    dispatcher.add_handler(add_handler)
     dispatcher.add_handler(remove_handler)
-    updater.start_polling()
-    updater.idle()
+
+    try:
+        updater.start_polling()
+        updater.idle()
+
+    except KeyboardInterrupt:
+        print('Shutting down')
+    
+    finally:
+        db.close()
+        print('Closed DB')
+
+    
 
 if __name__ == '__main__':
     main()
