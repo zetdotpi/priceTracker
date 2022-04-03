@@ -4,10 +4,11 @@ from multiprocessing import Pool
 import requests
 import bs4
 
-
 from entities import Entry, ComparisonPair
 from db import PriceTrackerDB
 
+from telegram import bot, ParseMode
+from config import BOT_API_KEY
 
 DB_PATH = './pricetracker.db'
 
@@ -36,9 +37,16 @@ def pull_entry_data(entry: Entry) -> ComparisonPair:
 
 db = PriceTrackerDB(DB_PATH)
 
+tbot = bot.Bot(BOT_API_KEY)
 
 def notify_price_change(pair: ComparisonPair):
     print(f'Notify about price change for {pair}')
+    subs = db.get_subscribers_by_url(pair.new.url)
+    for sub in subs:
+        tbot.send_message(
+            chat_id = sub,
+            text = f'Цена на **{pair.new.title}** ({pair.new.url} изменилась с {pair.old.price} на {pair.new.price}',
+            parse_mode = ParseMode.MARKDOWN)
 
 def refresh_active_entries():
     entries = db.get_entries()
@@ -55,16 +63,7 @@ def refresh_active_entries():
 
 
 def main():
-    sleep_time = 60
-    try:
-        while True:
-            refresh_active_entries()
-            print(80*'=')
-            print(f'Sleeping for {sleep_time} seconds')
-            time.sleep(sleep_time)
-    except KeyboardInterrupt as e:
-        print(f'Caught keyboard interrupt')
-
+    refresh_active_entries()
     db.close()
 
 

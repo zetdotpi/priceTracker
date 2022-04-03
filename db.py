@@ -77,6 +77,12 @@ _GET_USER_SUBSCRIPTIONS_STMT = '''
     );
 '''
 
+_GET_SUBSCRIPTIONS_BY_URL_STMT = '''
+    SELECT user_id
+    FROM subscriptions
+    WHERE observable_url = ?;
+'''
+
 
 class  PriceTrackerDB:
     def _create_tables(self):
@@ -138,6 +144,10 @@ class  PriceTrackerDB:
         data = self.cur.execute(_GET_USER_SUBSCRIPTIONS_STMT, (user_id,)).fetchall()
         entries = [Entry.from_tuple(item) for item in data]
         return entries
+
+    def get_subscribers_by_url(self, url: str) -> List[int]:
+        data = self.cur.execute(_GET_SUBSCRIPTIONS_BY_URL_STMT, (url,)).fetchall()
+        return data
 
     def close(self):
         self.conn.close()
