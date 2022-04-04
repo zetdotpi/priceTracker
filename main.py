@@ -10,6 +10,8 @@ from config import BOT_API_KEY, DB_PATH
 from entities import Entry, ComparisonPair
 from db import PriceTrackerDB
 
+from telegram import bot, ParseMode
+from config import BOT_API_KEY
 
 def pull_entry_data(entry: Entry) -> ComparisonPair:
     res = requests.get(
