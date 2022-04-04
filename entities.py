@@ -30,4 +30,8 @@ class ComparisonPair:
     def priceDifference(self):
         return self.new.price - self.old.price
 
-
+    def price_changed_message(self):
+        if self.old.price == None:
+            return f'{self.new.title} ({self.new.url}) сейчас цена {self.new.price}' 
+        else:
+            return f'{self.new.title} ({self.new.url}) цена изменилась с {self.old.price} на {self.new.price} ({self.priceDifference()})'

@@ -1,5 +1,5 @@
 import sqlite3
-from typing import List
+from typing import List, Tuple
 from entities import Entry
 
 
@@ -36,6 +36,7 @@ _INSERT_ENTRY_STMT = '''
 _UPDATE_ENTRY_STMT = '''
     UPDATE observables
     SET
+        title = ?,
         price = ?,
         last_check_dt = ?
     WHERE
@@ -71,10 +72,16 @@ _GET_USER_SUBSCRIPTIONS_STMT = '''
     SELECT title, url, price, last_check_dt
     FROM observables
     WHERE url IN (
-        SELECT url 
+        SELECT observable_url 
         FROM subscriptions
         WHERE user_id = ?
     );
+'''
+
+_GET_SUBSCRIPTIONS_BY_URL_STMT = '''
+    SELECT user_id
+    FROM subscriptions
+    WHERE observable_url = ?;
 '''
 
 
@@ -124,7 +131,7 @@ class  PriceTrackerDB:
     def add_entry(self, url: str) -> Entry:
         self.cur.execute(_INSERT_ENTRY_STMT, (url,))
         self.conn.commit()
-        return Entry(url, None, None, True)
+        return Entry(None, url, None, None)
 
     def update_entry(self, entry: Entry):
         self.cur.execute(_UPDATE_ENTRY_STMT, entry.to_tuple())
@@ -138,6 +145,10 @@ class  PriceTrackerDB:
         data = self.cur.execute(_GET_USER_SUBSCRIPTIONS_STMT, (user_id,)).fetchall()
         entries = [Entry.from_tuple(item) for item in data]
         return entries
+
+    def get_subscribers_by_url(self, url: str) -> Tuple[int]:
+        data = self.cur.execute(_GET_SUBSCRIPTIONS_BY_URL_STMT, (url,)).fetchall()
+        return (el[0] for el in data)
 
     def close(self):
         self.conn.close()

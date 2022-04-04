@@ -79,8 +79,9 @@ def fallback(update: Update, context: CallbackContext):
 
 def remove_selected_entry(update: Update, context: CallbackContext):
     user_id =  update.message.from_user.id
-    url = update.message.text.split('\n')[1]
+    title, url = update.message.text.split('\n')
     db.delete_subscription(user_id, url)
+    update.message.reply_text(f'{title} больше не отслеживается')
     return ConversationHandler.END
 
 def main():
